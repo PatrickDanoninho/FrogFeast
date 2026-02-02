@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{1eb4a6c4-276a-4603-8430-85bda9a13946}">
+		<property name="assetPath">
+			<value>Cymatics - BASS Burial - C.wav</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.0999985</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>4.1250113378684805</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{ffc939a9-5458-442a-9b15-fca1f639b7f5}</destination>
+		</relationship>
+	</object>
+</objects>
