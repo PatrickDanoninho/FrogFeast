@@ -8,11 +8,13 @@ public class StageManager : MonoBehaviour
     public static StageManager Instance;
 
     public GameManager gameManager;
+    public MusicManager musicManager;
 
     public void Awake()
     {
         Instance = this;
         gameManager = GameManager.Instance;
+        musicManager = MusicManager.Instance;
     }
 
     public BaseState currentBaseState;
@@ -29,7 +31,8 @@ public class StageManager : MonoBehaviour
 
     [Header("Spawn Controllers")]
     public List<GameObject> flyList = new List<GameObject>();
-    public float flySpawnTimer = 0;
+    public int flySpawnTimer = 5;
+    public int flyNextSpawn = 0;
     public List<GameObject> stingerList = new List<GameObject>();
     public List<GameObject> debrisList = new List<GameObject>();
 
@@ -38,6 +41,10 @@ public class StageManager : MonoBehaviour
     [SerializeField] float maxSpawnRadius = 6f;
     [SerializeField] float safeRadius = 2f;
     [SerializeField] float spawnHeight = 0.5f;
+
+    [Header("SpawnOnTimer")]
+    public bool waitForString = false;
+    private string stringToWaitFor = "MusicBody";
 
     // Start is called before the first frame update
     void Start()
@@ -56,6 +63,9 @@ public class StageManager : MonoBehaviour
 
     public void SwitchStage(BaseState newStage)
     {
+        MusicManager.OnBeat -= SpawnFly;
+        MusicManager.OnMarker -= WaitForMarker;
+
         currentBaseState = newStage;
         currentBaseState.EnterStage(this);
     }
@@ -81,38 +91,38 @@ public class StageManager : MonoBehaviour
         }
     }
 
-    //To use on GameStage
-    /// <summary>
-    /// Spawn flies where needed, using the list of available gameObjects
-    /// Increase <param name="spawnSpeed"></param> as player multiplier goes up
-    /// </summary>
-    public void SpwanFly(float spawnSpeed)
+    public void WaitForMarker(string marker) 
     {
+        if (marker == stringToWaitFor)
+        {
+            waitForString = false;
+        }
+    }
+
+    //To use on GameStage
+    public void SpawnFly(int beat)
+    {
+        if (waitForString)
+            return;
+
         if (flyList.Count == 0)
             return;
 
-        flySpawnTimer += Time.deltaTime;
+        //Pick first fly from list
+        GameObject fly = flyList[0].gameObject;
+        //Remove from list
+        flyList.Remove(fly);
 
-        if (flySpawnTimer >= spawnSpeed)
-        {
-            //Pick first fly from list
-            GameObject fly = flyList[0].gameObject;
+        //Place it and SetActive true
+        fly.transform.position = GetRandomSpawnPosition(Vector3.zero);
+        fly.SetActive(true);
 
-            //Place it and SetActive true
-            fly.transform.position = GetRandomSpawnPosition(Vector3.zero);
-            fly.SetActive(true);
+        //Make Fly Move
+        Fly flyScript = fly.GetComponent<Fly>();
+        flyScript.Spawn();
+        //Interactable flyInteractable = fly.GetComponent<Interactable>();
+        //flyInteractable.InteractableBehaviour();
 
-            //Make Fly Move
-            Fly flyScript = fly.GetComponent<Fly>();
-            flyScript.Spawn();
-            //Interactable flyInteractable = fly.GetComponent<Interactable>();
-            //flyInteractable.InteractableBehaviour();
-
-            //Remove from list
-            flyList.Remove(fly);
-            
-            flySpawnTimer = 0;
-        }
     }
 
     /// <summary>

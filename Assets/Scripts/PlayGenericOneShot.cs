@@ -5,6 +5,14 @@ using FMODUnity;
 
 public class PlayGenericOneShot : MonoBehaviour
 {
-    [EventRef]
-    public string soundEvent = null;
+    [SerializeField]
+    private EventReference soundEvent;
+
+    public void PlaySoundEvent() 
+    {
+        if (soundEvent.IsNull)
+            return;
+
+        RuntimeManager.PlayOneShot(soundEvent);
+    }
 }

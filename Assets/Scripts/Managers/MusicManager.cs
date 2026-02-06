@@ -9,18 +9,20 @@ public class MusicManager : MonoBehaviour
 {
     public static MusicManager Instance;
 
-    [SerializeField]
-    [EventRef]
-    private string music = null;
-
-    public TimelineInfo timeLineInfo = null;
-    private GCHandle timeLineHandle;
+    public EventReference music;
 
     private FMOD.Studio.EventInstance musicInstance;
-
     private FMOD.Studio.EVENT_CALLBACK beatCallback;
 
-    //todo 
+    public TimelineInfo timeLineInfo;
+    private GCHandle timeLineHandle;
+
+    private int pendingBeat = -1;
+    private string pendingMarker = null;
+
+    //todo
+    public static event Action<int> OnBeat;
+    public static event Action<string> OnMarker;
 
     [StructLayout(LayoutKind.Sequential)]
     public class TimelineInfo
@@ -31,26 +33,43 @@ public class MusicManager : MonoBehaviour
 
     public void Awake()
     {
-        //if (Instance == null)
-        //{
-        //    Instance = this;
-        //    DontDestroyOnLoad(gameObject);
-        //}
-        //else
-        //{
-        //    Destroy(gameObject);
-        //}
+        if (Instance != null)
+        {
+            Destroy(gameObject);
+            return;
+        }
 
-        //if (music != null)
-        //{
-        //    musicInstance = RuntimeManager.CreateInstance(music);
-        //    musicInstance.start();
-        //}
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+
+        musicInstance = RuntimeManager.CreateInstance(music);
+        SetUpTimeLineInstance();
     }
 
-    private void Start()
+    public void PlayMusic()
     {
-        //SetUpTimeLineInstance();
+        if (musicInstance.isValid())
+            musicInstance.start();
+
+    }
+    public void StopMusic()
+    {
+        musicInstance.stop(FMOD.Studio.STOP_MODE.ALLOWFADEOUT);
+    }
+
+    public void Update()
+    {
+        if (pendingBeat != -1)
+        {
+            OnBeat?.Invoke(pendingBeat);
+            pendingBeat = -1;
+        }
+
+        if (!string.IsNullOrEmpty(pendingMarker))
+        {
+            OnMarker?.Invoke(pendingMarker);
+            pendingMarker = null;
+        }
     }
 
     //To be called when GM comes back into the main menu, to clean up
@@ -62,6 +81,7 @@ public class MusicManager : MonoBehaviour
         timeLineHandle.Free();
     }
 
+
 #if UNITY_EDITOR
     private void OnGUI()
     {
@@ -70,52 +90,50 @@ public class MusicManager : MonoBehaviour
 #endif
 
     [AOT.MonoPInvokeCallback(typeof(FMOD.Studio.EVENT_CALLBACK))]
-    static FMOD.RESULT BeatEventCallback(FMOD.Studio.EVENT_CALLBACK_TYPE type, IntPtr instancePtr, IntPtr parameterPtr)
+    private static FMOD.RESULT BeatCallback(
+        FMOD.Studio.EVENT_CALLBACK_TYPE type,
+        IntPtr instancePtr,
+        IntPtr parameterPtr)
     {
-        FMOD.Studio.EventInstance instance = new FMOD.Studio.EventInstance(instancePtr);
+        var instance = new FMOD.Studio.EventInstance(instancePtr);
+        instance.getUserData(out IntPtr timelinePtr);
 
-        IntPtr timelineInfoPtr;
-        FMOD.RESULT result = instance.getUserData(out timelineInfoPtr);
+        if (timelinePtr == IntPtr.Zero)
+            return FMOD.RESULT.OK;
 
-        if (result != FMOD.RESULT.OK)
+        var handle = GCHandle.FromIntPtr(timelinePtr);
+        var info = (TimelineInfo)handle.Target;
+
+        switch (type)
         {
-            Debug.LogError("TimeLine callback error: " + result);
-        }
-        else if (timelineInfoPtr != IntPtr.Zero)
-        {
-            GCHandle timelineHandle = GCHandle.FromIntPtr(timelineInfoPtr);
-            TimelineInfo timelineInfo = (TimelineInfo)timelineHandle.Target;
+            case FMOD.Studio.EVENT_CALLBACK_TYPE.TIMELINE_BEAT:
+                var beat = (FMOD.Studio.TIMELINE_BEAT_PROPERTIES)
+                    Marshal.PtrToStructure(parameterPtr, typeof(FMOD.Studio.TIMELINE_BEAT_PROPERTIES));
+                info.currentBeat = beat.beat;
+                Instance.pendingBeat = beat.beat;
+                break;
 
-            switch (type)
-            {
-                case FMOD.Studio.EVENT_CALLBACK_TYPE.TIMELINE_MARKER:
-                    {
-                        var parameter = (FMOD.Studio.TIMELINE_BEAT_PROPERTIES)Marshal.PtrToStructure(parameterPtr, typeof(FMOD.Studio.TIMELINE_BEAT_PROPERTIES));
-                    }
-                    break;
-                case FMOD.Studio.EVENT_CALLBACK_TYPE.TIMELINE_BEAT:
-                    {
-                        var parameter = (FMOD.Studio.TIMELINE_MARKER_PROPERTIES)Marshal.PtrToStructure(parameterPtr, typeof(FMOD.Studio.TIMELINE_MARKER_PROPERTIES));
-                        timelineInfo.lastMarker = parameter.name;
-                    }
-                    break;
-                default:
-                    break;
-            }
+            case FMOD.Studio.EVENT_CALLBACK_TYPE.TIMELINE_MARKER:
+                var marker = (FMOD.Studio.TIMELINE_MARKER_PROPERTIES)
+                    Marshal.PtrToStructure(parameterPtr, typeof(FMOD.Studio.TIMELINE_MARKER_PROPERTIES));
+                info.lastMarker = marker.name;
+                Instance.pendingMarker = marker.name;
+                break;
         }
+
         return FMOD.RESULT.OK;
     }
 
     public void SetUpTimeLineInstance()
     {
-        if (music == null)
+        if (music.IsNull)
         {
             Debug.LogError("Music string is null");
             return;
         }
 
         timeLineInfo = new TimelineInfo();
-        beatCallback = new FMOD.Studio.EVENT_CALLBACK(BeatEventCallback);
+        beatCallback = new FMOD.Studio.EVENT_CALLBACK(BeatCallback);
         timeLineHandle = GCHandle.Alloc(timeLineInfo, GCHandleType.Pinned);
         musicInstance.setUserData(GCHandle.ToIntPtr(timeLineHandle));
         musicInstance.setCallback(beatCallback, FMOD.Studio.EVENT_CALLBACK_TYPE.TIMELINE_BEAT | FMOD.Studio.EVENT_CALLBACK_TYPE.TIMELINE_MARKER);

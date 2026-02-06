@@ -6,7 +6,7 @@ public class EndGameStage : BaseState
 {
     public override void EnterStage(StageManager stageManager)
     {
-
+        stageManager.waitForString = true;
     }
 
     public override void UpdateStage(StageManager stageManager)
